@@ -1,4 +1,14 @@
+// Deterministic Korean (Hangul) -> Thai phonetic transliteration.
+//
+// Each Hangul syllable is decomposed into its jamo (onset / vowel / coda) via
+// Unicode math, then mapped directly to Thai. A liaison pass moves a syllable's
+// coda onto a following vowel-initial syllable, matching Korean 연음 pronunciation
+// (e.g. 좋아 -> jo-a, 음악은 -> eu-ma-geun). Non-Hangul text (English, spaces,
+// punctuation, section markers) passes through untouched.
+
 const HANGUL_RANGE = /[가-힣ᄀ-ᇿ㄰-㆏]/
+const HANGUL_SYLLABLE_START = 0xac00
+const HANGUL_SYLLABLE_END = 0xd7a3
 
 export function containsHangul(text: string): boolean {
   return HANGUL_RANGE.test(text)
@@ -9,100 +19,149 @@ export interface LinePair {
   transliteration: string | null
 }
 
-const SYSTEM_PROMPT = `ช่วยแปลงเนื้อเพลงต่อไปนี้ให้อยู่ในรูปแบบ "คำอ่านภาษาไทยทับศัพท์" โดยมีเงื่อนไขดังนี้:
+// Onset (초성) jamo index 0-18 -> Thai initial consonant ('' = silent ㅇ).
+const ONSETS = [
+  'ก', 'ก', 'น', 'ด', 'ต', 'ร', 'ม', 'บ', 'ป', 'ซ',
+  'ซ', '', 'จ', 'จ', 'ช', 'ค', 'ท', 'พ', 'ฮ',
+]
 
-ส่วนที่เป็นภาษาเกาหลี/ภาษาอื่น: ให้เขียนเป็นคำอ่านภาษาไทย โดยใส่เครื่องหมายขีดกลาง (-) แยกเสียงระดับพยางค์ให้ชัดเจนตามจังหวะการร้อง (เช่น ออ-ริน มัม-โซก)
+// Coda (종성) jamo index 0-27 -> Thai final consonant ('' = no coda).
+const CODAS = [
+  '', 'ก', 'ก', 'ก', 'น', 'น', 'น', 'ด', 'ล', 'ก',
+  'ม', 'ล', 'ล', 'ล', 'บ', 'ล', 'ม', 'บ', 'บ', 'ด',
+  'ด', 'ง', 'ด', 'ด', 'ก', 'ด', 'บ', 'ด',
+]
 
-ส่วนที่เป็นภาษาอังกฤษ: ให้คงรูปตัวพิมพ์ภาษาอังกฤษไว้ตามเดิม ไม่ต้องแปลงเป็นคำอ่านภาษาไทย (เช่น We're blooming, yeah, keep dreamin', my heart)
+// Simple coda jamo index -> onset jamo index when it liaisons onto the next
+// vowel-initial syllable.
+const CODA_TO_ONSET: Record<number, number> = {
+  1: 0, 2: 1, 4: 2, 7: 3, 8: 5, 16: 6, 17: 7, 19: 9, 20: 10,
+  22: 12, 23: 14, 24: 15, 25: 16, 26: 17,
+}
+const CODA_DROPS = new Set([27]) // ㅎ elides before a vowel
 
-โครงสร้างเพลง: ให้คงรูปแบบท่อน [Intro], [Verse], [Chorus], [Bridge] ไว้เหมือนเดิม ห้ามตัดออก
-
-อินพุตแต่ละบรรทัดจะขึ้นต้นด้วยหมายเลขบรรทัดตามด้วยวงเล็บปิด เช่น "1) เนื้อเพลงบรรทัดแรก"
-ให้ตอบกลับเป็นบรรทัดผลลัพธ์จำนวนเท่ากับอินพุตทุกประการ หนึ่งบรรทัดอินพุตต่อหนึ่งบรรทัดผลลัพธ์ โดยคงหมายเลขบรรทัดไว้ในรูปแบบเดียวกัน เช่น "1) คำอ่านภาษาไทยทับศัพท์" ห้ามเพิ่มคำอธิบายอื่นใดนอกจากบรรทัดผลลัพธ์
-
-ตัวอย่าง:
-input: "1) 안녕하세요"
-output: "1) อัน-นยอง-ฮะ-เซโย"
-input: "2) 사랑해요"
-output: "2) ซา-รัง-แฮ-โย"
-input: "3) We are blooming"
-output: "3) We are blooming"`
-
-const RETRY_SUFFIX =
-  '\n\nสำคัญ: ผลลัพธ์ครั้งก่อนมีจำนวนบรรทัดไม่ตรงกับอินพุต กรุณาตอบกลับให้มีจำนวนบรรทัดเท่ากับอินพุตทุกประการ หนึ่งบรรทัดอินพุตต่อหนึ่งบรรทัดผลลัพธ์เท่านั้น'
-
-const LINE_PATTERN = /^(\d+)\)\s?(.*)$/
-
-function formatInput(lines: string[]): string {
-  return lines.map((line, i) => `${i + 1}) ${line}`).join('\n')
+// Compound codas splitting under liaison. When the second element is ㅎ it
+// elides and the first element itself moves (keepCoda 0); otherwise the first
+// element stays as coda and the second moves onto the next syllable.
+const DOUBLE_CODA: Record<number, { keepCoda: number; moveOnset: number }> = {
+  3: { keepCoda: 1, moveOnset: 9 }, // ㄳ ㄱ+ㅅ
+  5: { keepCoda: 4, moveOnset: 12 }, // ㄵ ㄴ+ㅈ
+  6: { keepCoda: 0, moveOnset: 2 }, // ㄶ ㄴ+ㅎ
+  9: { keepCoda: 8, moveOnset: 0 }, // ㄺ ㄹ+ㄱ
+  10: { keepCoda: 8, moveOnset: 6 }, // ㄻ ㄹ+ㅁ
+  11: { keepCoda: 8, moveOnset: 7 }, // ㄼ ㄹ+ㅂ
+  12: { keepCoda: 8, moveOnset: 9 }, // ㄽ ㄹ+ㅅ
+  13: { keepCoda: 8, moveOnset: 16 }, // ㄾ ㄹ+ㅌ
+  14: { keepCoda: 8, moveOnset: 17 }, // ㄿ ㄹ+ㅍ
+  15: { keepCoda: 0, moveOnset: 5 }, // ㅀ ㄹ+ㅎ
+  18: { keepCoda: 17, moveOnset: 9 }, // ㅄ ㅂ+ㅅ
 }
 
-function parseOutput(text: string): Map<number, string> {
-  const result = new Map<number, string>()
-  for (const rawLine of text.split('\n')) {
-    const match = LINE_PATTERN.exec(rawLine.trim())
-    if (!match) continue
-    const index = Number(match[1])
-    result.set(index, match[2])
+// Base vowel wrappers: (consonant core, coda) -> Thai syllable string.
+function baseA(c: string, k: string) { return k ? c + 'ั' + k : c + 'า' }
+function baseAe(c: string, k: string) { return 'แ' + c + k }
+function baseEo(c: string, k: string) { return c + 'อ' + k }
+function baseE(c: string, k: string) { return 'เ' + c + k }
+function baseO(c: string, k: string) { return 'โ' + c + k }
+function baseU(c: string, k: string) { return k ? c + 'ุ' + k : c + 'ู' }
+function baseEu(c: string, k: string) { return k ? c + 'ึ' + k : c + 'ือ' }
+function baseI(c: string, k: string) { return k ? c + 'ิ' + k : c + 'ี' }
+function baseUi(c: string, k: string) { return c + 'ึย' + k }
+
+// Vowel (중성) jamo index 0-20. glide inserts ย (y) or ว (w) after the onset.
+const VOWELS: { glide: string; base: (c: string, k: string) => string }[] = [
+  { glide: '', base: baseA }, // ㅏ a
+  { glide: '', base: baseAe }, // ㅐ ae
+  { glide: 'ย', base: baseA }, // ㅑ ya
+  { glide: 'ย', base: baseAe }, // ㅒ yae
+  { glide: '', base: baseEo }, // ㅓ eo
+  { glide: '', base: baseE }, // ㅔ e
+  { glide: 'ย', base: baseEo }, // ㅕ yeo
+  { glide: 'ย', base: baseE }, // ㅖ ye
+  { glide: '', base: baseO }, // ㅗ o
+  { glide: 'ว', base: baseA }, // ㅘ wa
+  { glide: 'ว', base: baseAe }, // ㅙ wae
+  { glide: 'ว', base: baseE }, // ㅚ oe
+  { glide: 'ย', base: baseO }, // ㅛ yo
+  { glide: '', base: baseU }, // ㅜ u
+  { glide: 'ว', base: baseEo }, // ㅝ wo
+  { glide: 'ว', base: baseE }, // ㅞ we
+  { glide: 'ว', base: baseI }, // ㅟ wi
+  { glide: 'ย', base: baseU }, // ㅠ yu
+  { glide: '', base: baseEu }, // ㅡ eu
+  { glide: '', base: baseUi }, // ㅢ ui
+  { glide: '', base: baseI }, // ㅣ i
+]
+
+interface Jamo {
+  onset: number
+  vowel: number
+  coda: number
+}
+
+function decompose(code: number): Jamo {
+  const x = code - HANGUL_SYLLABLE_START
+  return { onset: Math.floor(x / 588), vowel: Math.floor((x % 588) / 28), coda: x % 28 }
+}
+
+function applyLiaison(syllables: Jamo[]): Jamo[] {
+  for (let i = 0; i < syllables.length - 1; i++) {
+    const cur = syllables[i]
+    const next = syllables[i + 1]
+    if (cur.coda === 0 || next.onset !== 11) continue // next must be vowel-initial
+    if (cur.coda in DOUBLE_CODA) {
+      const { keepCoda, moveOnset } = DOUBLE_CODA[cur.coda]
+      cur.coda = keepCoda
+      next.onset = moveOnset
+    } else if (CODA_DROPS.has(cur.coda)) {
+      cur.coda = 0
+    } else if (cur.coda in CODA_TO_ONSET) {
+      next.onset = CODA_TO_ONSET[cur.coda]
+      cur.coda = 0
+    }
+    // ㅇ (21) stays in place
   }
-  return result
+  return syllables
 }
 
-function extractText(response: unknown): string {
-  if (typeof response === 'string') return response
-  if (response && typeof response === 'object') {
-    const obj = response as Record<string, unknown>
-    if (typeof obj.response === 'string') return obj.response
-    const choice = (obj.choices as Record<string, unknown>[] | undefined)?.[0]
-    const message = choice?.message as Record<string, unknown> | undefined
-    if (typeof message?.content === 'string') return message.content
-    if (typeof choice?.text === 'string') return choice.text
+function mapSyllable({ onset, vowel, coda }: Jamo): string {
+  const onsetThai = ONSETS[onset]
+  const codaThai = CODAS[coda]
+  const v = VOWELS[vowel]
+  let core: string
+  if (v.glide) {
+    core = onsetThai === '' ? v.glide : onsetThai + v.glide
+  } else {
+    core = onsetThai === '' ? 'อ' : onsetThai
   }
-  return ''
+  return v.base(core, codaThai)
 }
 
-function maxTokensFor(lineCount: number): number {
-  return Math.min(8192, Math.max(1024, lineCount * 120))
-}
-
-async function callQwen(
-  ai: Ai,
-  lines: string[],
-  systemPrompt: string,
-): Promise<Map<number, string>> {
-  const response = await ai.run('@cf/qwen/qwen3-30b-a3b-fp8', {
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: formatInput(lines) },
-    ],
-    max_tokens: maxTokensFor(lines.length),
-    temperature: 0.3,
-  })
-
-  const text = extractText(response)
-  return parseOutput(text)
-}
-
-export async function transliterateLines(ai: Ai, lines: string[]): Promise<LinePair[]> {
-  let parsed = await callQwen(ai, lines, SYSTEM_PROMPT)
-
-  if (parsed.size !== lines.length) {
-    parsed = await callQwen(ai, lines, SYSTEM_PROMPT + RETRY_SUFFIX)
+export function hangulToThai(text: string): string {
+  let out = ''
+  let run: Jamo[] = []
+  const flush = () => {
+    if (run.length) {
+      out += applyLiaison(run).map(mapSyllable).join('-')
+      run = []
+    }
   }
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!
+    if (code >= HANGUL_SYLLABLE_START && code <= HANGUL_SYLLABLE_END) {
+      run.push(decompose(code))
+    } else {
+      flush()
+      out += ch
+    }
+  }
+  flush()
+  return out
+}
 
-  return lines.map((original, i) => ({
+export function transliterateLines(lines: string[]): LinePair[] {
+  return lines.map((original) => ({
     original,
-    // Lines with no Hangul are passed through as-is, regardless of what the
-    // model returned — guarantees English/structure markers are never
-    // mistakenly transliterated, per the "keep English as-is" prompt rule.
-    transliteration: containsHangul(original) ? (parsed.get(i + 1) ?? null) : original,
+    transliteration: containsHangul(original) ? hangulToThai(original) : original,
   }))
-}
-
-export async function hashText(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
 }

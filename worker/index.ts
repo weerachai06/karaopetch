@@ -1,8 +1,7 @@
 import { getLyrics, searchLyrics } from './lrclib'
-import { containsHangul, hashText, transliterateLines } from './transliterate'
+import { containsHangul, transliterateLines } from './transliterate'
 
 const LYRICS_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
-const TRANSLITERATION_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
 
 export default {
   async fetch(request, env) {
@@ -60,17 +59,7 @@ export default {
         return Response.json({ transliterated: false, linePairs: null })
       }
 
-      const cacheKey = `transliteration:v4:${await hashText(lyrics)}`
-      const cached = await env.LYRICS_CACHE.get(cacheKey, 'json')
-      if (cached) {
-        return Response.json({ transliterated: true, linePairs: cached })
-      }
-
-      const lines = lyrics.split('\n')
-      const linePairs = await transliterateLines(env.AI, lines)
-      await env.LYRICS_CACHE.put(cacheKey, JSON.stringify(linePairs), {
-        expirationTtl: TRANSLITERATION_CACHE_TTL_SECONDS,
-      })
+      const linePairs = transliterateLines(lyrics.split('\n'))
       return Response.json({ transliterated: true, linePairs })
     }
 

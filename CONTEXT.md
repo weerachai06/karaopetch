@@ -5,7 +5,7 @@ A lyrics search app that shows a Thai phonetic reading for non-Thai (e.g. Korean
 ## Language
 
 **Transliteration**:
-The Thai-script phonetic rendering of how foreign-language lyrics sound (e.g. "ออ-ริน"), produced by an AI provider. Not a translation of meaning.
+The Thai-script phonetic rendering of how foreign-language lyrics sound (e.g. "ออ-ริน"). Not a translation of meaning.
 _Avoid_: Translation, translate
 
 **Script Detection**:

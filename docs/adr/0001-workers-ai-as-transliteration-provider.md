@@ -1,3 +1,5 @@
 # Use Cloudflare Workers AI (Qwen3) as the Transliteration provider
 
+> **Superseded by [ADR-0003](0003-deterministic-hangul-to-thai-mapping.md).** Transliteration is now done by a deterministic jamo-to-Thai mapper, not an AI model. Kept for history.
+
 We need an AI provider to generate Thai transliterations of foreign-language lyrics. Considered OpenRouter (confirmed OpenAI-compatible API with Qwen models) and OpenCode Go (unclear if it exposes a server-callable API, appears built for agentic coding tool usage rather than backend integration). Chose **Cloudflare Workers AI**'s built-in Qwen3 model (`@cf/qwen/qwen3-30b-a3b-fp8`) instead: since the app already deploys to Cloudflare Workers, this avoids a separate account, API key, and external network hop, and is free within the 10,000 neurons/day budget. Trade-off: `qwen3-30b-a3b-fp8` is a general-purpose model, not fine-tuned for transliteration — quality has not yet been validated against the target prompt.
