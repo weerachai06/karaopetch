@@ -18,7 +18,15 @@ const SYSTEM_PROMPT = `ช่วยแปลงเนื้อเพลงต่
 โครงสร้างเพลง: ให้คงรูปแบบท่อน [Intro], [Verse], [Chorus], [Bridge] ไว้เหมือนเดิม ห้ามตัดออก
 
 อินพุตแต่ละบรรทัดจะขึ้นต้นด้วยหมายเลขบรรทัดตามด้วยวงเล็บปิด เช่น "1) เนื้อเพลงบรรทัดแรก"
-ให้ตอบกลับเป็นบรรทัดผลลัพธ์จำนวนเท่ากับอินพุตทุกประการ หนึ่งบรรทัดอินพุตต่อหนึ่งบรรทัดผลลัพธ์ โดยคงหมายเลขบรรทัดไว้ในรูปแบบเดียวกัน เช่น "1) คำอ่านภาษาไทยทับศัพท์" ห้ามเพิ่มคำอธิบายอื่นใดนอกจากบรรทัดผลลัพธ์`
+ให้ตอบกลับเป็นบรรทัดผลลัพธ์จำนวนเท่ากับอินพุตทุกประการ หนึ่งบรรทัดอินพุตต่อหนึ่งบรรทัดผลลัพธ์ โดยคงหมายเลขบรรทัดไว้ในรูปแบบเดียวกัน เช่น "1) คำอ่านภาษาไทยทับศัพท์" ห้ามเพิ่มคำอธิบายอื่นใดนอกจากบรรทัดผลลัพธ์
+
+ตัวอย่าง:
+input: "1) 안녕하세요"
+output: "1) อัน-นยอง-ฮะ-เซโย"
+input: "2) 사랑해요"
+output: "2) ซา-รัง-แฮ-โย"
+input: "3) We are blooming"
+output: "3) We are blooming"`
 
 const RETRY_SUFFIX =
   '\n\nสำคัญ: ผลลัพธ์ครั้งก่อนมีจำนวนบรรทัดไม่ตรงกับอินพุต กรุณาตอบกลับให้มีจำนวนบรรทัดเท่ากับอินพุตทุกประการ หนึ่งบรรทัดอินพุตต่อหนึ่งบรรทัดผลลัพธ์เท่านั้น'
@@ -68,6 +76,7 @@ async function callQwen(
       { role: 'user', content: formatInput(lines) },
     ],
     max_tokens: maxTokensFor(lines.length),
+    temperature: 0.3,
   })
 
   const text = extractText(response)
@@ -83,7 +92,10 @@ export async function transliterateLines(ai: Ai, lines: string[]): Promise<LineP
 
   return lines.map((original, i) => ({
     original,
-    transliteration: parsed.get(i + 1) ?? null,
+    // Lines with no Hangul are passed through as-is, regardless of what the
+    // model returned — guarantees English/structure markers are never
+    // mistakenly transliterated, per the "keep English as-is" prompt rule.
+    transliteration: containsHangul(original) ? (parsed.get(i + 1) ?? null) : original,
   }))
 }
 

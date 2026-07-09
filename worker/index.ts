@@ -60,7 +60,7 @@ export default {
         return Response.json({ transliterated: false, linePairs: null })
       }
 
-      const cacheKey = `transliteration:v2:${await hashText(lyrics)}`
+      const cacheKey = `transliteration:v4:${await hashText(lyrics)}`
       const cached = await env.LYRICS_CACHE.get(cacheKey, 'json')
       if (cached) {
         return Response.json({ transliterated: true, linePairs: cached })
