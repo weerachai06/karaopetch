@@ -11,6 +11,14 @@ interface LyricsSearchResult {
   albumName: string | null
 }
 
+interface LyricsDetail {
+  id: number
+  trackName: string
+  artistName: string
+  albumName: string | null
+  plainLyrics: string | null
+}
+
 async function searchLyrics(query: string): Promise<LyricsSearchResult[]> {
   const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
   if (!response.ok) {
@@ -19,14 +27,33 @@ async function searchLyrics(query: string): Promise<LyricsSearchResult[]> {
   return response.json()
 }
 
+async function fetchLyrics(id: number): Promise<LyricsDetail> {
+  const response = await fetch(`/api/lyrics?id=${id}`)
+  if (!response.ok) {
+    throw new Error(`Lyrics fetch failed with status ${response.status}`)
+  }
+  return response.json()
+}
+
 function App() {
   const [query, setQuery] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
+  const [selectedId, setSelectedId] = useState<number | null>(null)
 
   const { data, isFetching, isError } = useQuery({
     queryKey: ['lyrics-search', submittedQuery],
     queryFn: () => searchLyrics(submittedQuery),
     enabled: submittedQuery.length > 0,
+  })
+
+  const {
+    data: lyrics,
+    isFetching: isLyricsFetching,
+    isError: isLyricsError,
+  } = useQuery({
+    queryKey: ['lyrics-detail', selectedId],
+    queryFn: () => fetchLyrics(selectedId!),
+    enabled: selectedId !== null,
   })
 
   return (
@@ -64,7 +91,7 @@ function App() {
               <Button
                 variant="outline"
                 className="h-auto w-full flex-col items-start gap-0.5 text-left"
-                onClick={() => console.log('selected', result)}
+                onClick={() => setSelectedId(result.id)}
               >
                 <span className="font-medium text-foreground">{result.trackName}</span>
                 <span className="text-sm text-muted-foreground">
@@ -75,6 +102,27 @@ function App() {
             </li>
           ))}
         </ul>
+      )}
+
+      {selectedId !== null && (
+        <section className="flex flex-col gap-2">
+          {isLyricsFetching && <p className="text-muted-foreground">Loading lyrics...</p>}
+          {isLyricsError && <p className="text-destructive">Could not load lyrics. Try again.</p>}
+          {!isLyricsFetching && !isLyricsError && lyrics && (
+            <>
+              <h2 className="text-xl font-semibold text-foreground">
+                {lyrics.trackName} — {lyrics.artistName}
+              </h2>
+              {lyrics.plainLyrics ? (
+                <pre className="whitespace-pre-wrap font-sans text-foreground">
+                  {lyrics.plainLyrics}
+                </pre>
+              ) : (
+                <p className="text-muted-foreground">No lyrics available for this track.</p>
+              )}
+            </>
+          )}
+        </section>
       )}
     </main>
   )

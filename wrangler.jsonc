@@ -6,5 +6,11 @@
   "assets": {
     "not_found_handling": "single-page-application",
     "binding": "ASSETS"
-  }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "LYRICS_CACHE",
+      "id": "6c1a896b2b994f19b2492337499fc752"
+    }
+  ]
 }
