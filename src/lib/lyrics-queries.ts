@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import { fetchLyrics, fetchTransliteration, searchLyrics } from '@/lib/lyrics-api'
+import { fetchCachedSongs, fetchLyrics, fetchTransliteration, searchLyrics } from '@/lib/lyrics-api'
 
 export function searchQueryOptions(query: string) {
   return queryOptions({
@@ -13,6 +13,13 @@ export function lyricsDetailQueryOptions(songId: number) {
   return queryOptions({
     queryKey: ['lyrics-detail', songId],
     queryFn: () => fetchLyrics(songId),
+  })
+}
+
+export function cachedSongsQueryOptions() {
+  return queryOptions({
+    queryKey: ['cached-songs'],
+    queryFn: () => fetchCachedSongs(),
   })
 }
 

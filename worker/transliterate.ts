@@ -53,6 +53,10 @@ function extractText(response: unknown): string {
   return ''
 }
 
+function maxTokensFor(lineCount: number): number {
+  return Math.min(8192, Math.max(1024, lineCount * 120))
+}
+
 async function callQwen(
   ai: Ai,
   lines: string[],
@@ -63,6 +67,7 @@ async function callQwen(
       { role: 'system', content: systemPrompt },
       { role: 'user', content: formatInput(lines) },
     ],
+    max_tokens: maxTokensFor(lines.length),
   })
 
   const text = extractText(response)

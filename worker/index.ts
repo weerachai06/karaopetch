@@ -41,6 +41,14 @@ export default {
       return Response.json(lyrics)
     }
 
+    if (url.pathname === '/api/cached-songs') {
+      const list = await env.LYRICS_CACHE.list({ prefix: 'lyrics:' })
+      const songs = await Promise.all(
+        list.keys.map((key) => env.LYRICS_CACHE.get(key.name, 'json')),
+      )
+      return Response.json(songs.filter(Boolean))
+    }
+
     if (url.pathname === '/api/transliterate' && request.method === 'POST') {
       const body = (await request.json()) as { lyrics?: string }
       const lyrics = body.lyrics?.trim()
@@ -52,7 +60,7 @@ export default {
         return Response.json({ transliterated: false, linePairs: null })
       }
 
-      const cacheKey = `transliteration:${await hashText(lyrics)}`
+      const cacheKey = `transliteration:v2:${await hashText(lyrics)}`
       const cached = await env.LYRICS_CACHE.get(cacheKey, 'json')
       if (cached) {
         return Response.json({ transliterated: true, linePairs: cached })

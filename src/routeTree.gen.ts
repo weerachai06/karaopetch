@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as CachedRouteImport } from './routes/cached'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SongsPasteRouteImport } from './routes/songs/paste'
 import { Route as SongsSongIdRouteImport } from './routes/songs/$songId'
 
+const CachedRoute = CachedRouteImport.update({
+  id: '/cached',
+  path: '/cached',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,36 +37,47 @@ const SongsSongIdRoute = SongsSongIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cached': typeof CachedRoute
   '/songs/$songId': typeof SongsSongIdRoute
   '/songs/paste': typeof SongsPasteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cached': typeof CachedRoute
   '/songs/$songId': typeof SongsSongIdRoute
   '/songs/paste': typeof SongsPasteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cached': typeof CachedRoute
   '/songs/$songId': typeof SongsSongIdRoute
   '/songs/paste': typeof SongsPasteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/songs/$songId' | '/songs/paste'
+  fullPaths: '/' | '/cached' | '/songs/$songId' | '/songs/paste'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/songs/$songId' | '/songs/paste'
-  id: '__root__' | '/' | '/songs/$songId' | '/songs/paste'
+  to: '/' | '/cached' | '/songs/$songId' | '/songs/paste'
+  id: '__root__' | '/' | '/cached' | '/songs/$songId' | '/songs/paste'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CachedRoute: typeof CachedRoute
   SongsSongIdRoute: typeof SongsSongIdRoute
   SongsPasteRoute: typeof SongsPasteRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/cached': {
+      id: '/cached'
+      path: '/cached'
+      fullPath: '/cached'
+      preLoaderRoute: typeof CachedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CachedRoute: CachedRoute,
   SongsSongIdRoute: SongsSongIdRoute,
   SongsPasteRoute: SongsPasteRoute,
 }

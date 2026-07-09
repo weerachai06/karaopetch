@@ -39,6 +39,10 @@ export function fetchLyrics(id: number): Promise<LyricsDetail> {
   return request(`/api/lyrics?id=${id}`)
 }
 
+export function fetchCachedSongs(): Promise<LyricsDetail[]> {
+  return request('/api/cached-songs')
+}
+
 export function fetchTransliteration(lyrics: string): Promise<TransliterateResponse> {
   return request('/api/transliterate', {
     method: 'POST',
