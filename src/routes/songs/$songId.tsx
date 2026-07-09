@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { LyricsView } from '@/components/lyrics-view'
 import { lyricsDetailQueryOptions } from '@/lib/lyrics-queries'
 
@@ -19,7 +20,12 @@ function SongDetailPage() {
 
   return (
     <section className="flex flex-col gap-2">
-      {isFetching && <p className="text-muted-foreground">Loading lyrics...</p>}
+      {isFetching && (
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading lyrics…
+        </p>
+      )}
       {isError && <p className="text-destructive">Could not load lyrics. Try again.</p>}
       {lyrics && <LyricsView lyrics={lyrics} />}
     </section>

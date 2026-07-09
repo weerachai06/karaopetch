@@ -12,7 +12,7 @@ function PastedLyricsPage() {
   if (!pastedLyrics) {
     return (
       <p className="text-muted-foreground">
-        No pasted lyrics to show — go back and paste some first.
+        No lyrics to show — go back and paste some first.
       </p>
     )
   }
