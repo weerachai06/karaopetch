@@ -14,17 +14,17 @@ function CachedSongsPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold text-foreground">Saved songs</h1>
+      <h1 className="font-display text-2xl font-bold text-foreground">Cached songs</h1>
 
       {isFetching && <p className="text-muted-foreground">Loading…</p>}
-      {isError && <p className="text-destructive">Could not load saved songs.</p>}
+      {isError && <p className="text-destructive">Could not load cached songs.</p>}
 
       {songs && songs.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-input py-12 text-center">
           <span className="grid size-12 place-items-center rounded-full bg-secondary text-primary">
             <ListMusic className="size-6" />
           </span>
-          <p className="font-display font-semibold text-foreground">Nothing saved yet</p>
+          <p className="font-display font-semibold text-foreground">Nothing cached yet</p>
           <p className="text-sm text-muted-foreground">
             Songs you open show up here for a quick encore.
           </p>
