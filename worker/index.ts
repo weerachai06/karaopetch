@@ -1,6 +1,8 @@
 import { getLyrics, searchLyrics } from './lrclib'
+import { containsHangul, hashText, transliterateLines } from './transliterate'
 
 const LYRICS_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
+const TRANSLITERATION_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
 
 export default {
   async fetch(request, env) {
@@ -37,6 +39,31 @@ export default {
         expirationTtl: LYRICS_CACHE_TTL_SECONDS,
       })
       return Response.json(lyrics)
+    }
+
+    if (url.pathname === '/api/transliterate' && request.method === 'POST') {
+      const body = (await request.json()) as { lyrics?: string }
+      const lyrics = body.lyrics?.trim()
+      if (!lyrics) {
+        return Response.json({ error: 'Missing "lyrics" in request body' }, { status: 400 })
+      }
+
+      if (!containsHangul(lyrics)) {
+        return Response.json({ transliterated: false, linePairs: null })
+      }
+
+      const cacheKey = `transliteration:${await hashText(lyrics)}`
+      const cached = await env.LYRICS_CACHE.get(cacheKey, 'json')
+      if (cached) {
+        return Response.json({ transliterated: true, linePairs: cached })
+      }
+
+      const lines = lyrics.split('\n')
+      const linePairs = await transliterateLines(env.AI, lines)
+      await env.LYRICS_CACHE.put(cacheKey, JSON.stringify(linePairs), {
+        expirationTtl: TRANSLITERATION_CACHE_TTL_SECONDS,
+      })
+      return Response.json({ transliterated: true, linePairs })
     }
 
     return env.ASSETS.fetch(request)

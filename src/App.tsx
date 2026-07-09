@@ -36,6 +36,28 @@ async function fetchLyrics(id: number): Promise<LyricsDetail> {
   return response.json()
 }
 
+interface LinePair {
+  original: string
+  transliteration: string | null
+}
+
+interface TransliterateResponse {
+  transliterated: boolean
+  linePairs: LinePair[] | null
+}
+
+async function fetchTransliteration(lyrics: string): Promise<TransliterateResponse> {
+  const response = await fetch('/api/transliterate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lyrics }),
+  })
+  if (!response.ok) {
+    throw new Error(`Transliteration failed with status ${response.status}`)
+  }
+  return response.json()
+}
+
 function App() {
   const [query, setQuery] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
@@ -61,6 +83,16 @@ function App() {
 
   const lyrics = pastedLyrics ?? fetchedLyrics
   const noResults = !isFetching && !isError && data && data.length === 0
+
+  const {
+    data: transliteration,
+    isFetching: isTransliterationFetching,
+    isError: isTransliterationError,
+  } = useQuery({
+    queryKey: ['transliteration', lyrics?.plainLyrics],
+    queryFn: () => fetchTransliteration(lyrics!.plainLyrics!),
+    enabled: Boolean(lyrics?.plainLyrics),
+  })
 
   return (
     <main className="mx-auto flex min-h-svh max-w-xl flex-col gap-6 p-6">
@@ -155,9 +187,30 @@ function App() {
             {lyrics.artistName ? ` — ${lyrics.artistName}` : ''}
           </h2>
           {lyrics.plainLyrics ? (
-            <pre className="whitespace-pre-wrap font-sans text-foreground">
-              {lyrics.plainLyrics}
-            </pre>
+            <>
+              {isTransliterationFetching && (
+                <p className="text-muted-foreground">Transliterating...</p>
+              )}
+              {isTransliterationError && (
+                <p className="text-destructive">Could not transliterate lyrics.</p>
+              )}
+              {transliteration?.transliterated && transliteration.linePairs ? (
+                <ul className="flex flex-col gap-1">
+                  {transliteration.linePairs.map((pair, i) => (
+                    <li key={i} className="grid grid-cols-2 gap-4">
+                      <span className="text-foreground">{pair.original}</span>
+                      <span className="text-muted-foreground">
+                        {pair.transliteration ?? '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <pre className="whitespace-pre-wrap font-sans text-foreground">
+                  {lyrics.plainLyrics}
+                </pre>
+              )}
+            </>
           ) : (
             <p className="text-muted-foreground">No lyrics available for this track.</p>
           )}
