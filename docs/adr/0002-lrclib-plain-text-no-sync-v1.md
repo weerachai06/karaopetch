@@ -1,0 +1,3 @@
+# Use LRCLIB for lyrics search; ignore sync timestamps in v1
+
+We need a lyrics source for the search flow. Chose **LRCLIB** — free, no API key, and returns lyrics in `.lrc` (time-synced) format. However, `.lrc` is typically line-by-line timestamped and does not preserve structural section markers (`[Verse]`, `[Chorus]`, `[Bridge]`), which the Transliteration prompt requires to be kept intact. Reconciling per-line timestamps with section-marker preservation, and with Transliteration output that still lines up with timestamps, is out of scope for v1. **v1 extracts plain lyric text only and discards sync timestamps**; time-synced karaoke scrolling is deferred to a later version.
